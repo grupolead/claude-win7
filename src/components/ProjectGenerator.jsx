@@ -182,19 +182,14 @@ Por favor, gere o projeto completo e estruturado seguindo todas as seções soli
       let buffer = "";
       let fullText = "";
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      const processLine = (line) => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("event:")) return;
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          const jsonStr = line.slice(6).trim();
-          if (!jsonStr || jsonStr === "[DONE]") continue;
-
+        // SSE data line
+        if (trimmed.startsWith("data: ")) {
+          const jsonStr = trimmed.slice(6).trim();
+          if (!jsonStr || jsonStr === "[DONE]") return;
           try {
             const event = JSON.parse(jsonStr);
             if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
@@ -205,22 +200,52 @@ Por favor, gere o projeto completo e estruturado seguindo todas as seções soli
               throw new Error(event.error?.message || "Erro retornado pela API");
             }
           } catch (parseErr) {
-            if (parseErr.message.includes("Erro retornado")) throw parseErr;
+            if (parseErr.message.includes("Erro retornado") || parseErr.message.includes("Erro na API")) throw parseErr;
           }
+          return;
         }
+
+        // Non-SSE line: pode ser JSON de erro direto da API (ex: overloaded, rate limit)
+        try {
+          const raw = JSON.parse(trimmed);
+          if (raw.type === "error" || raw.error) {
+            const msg = raw.error?.message || raw.error?.type || "Erro da API Claude";
+            throw new Error(msg);
+          }
+        } catch (parseErr) {
+          if (parseErr.message && !parseErr.message.includes("JSON")) throw parseErr;
+        }
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          processLine(line);
+        }
+      }
+
+      // Processar dados restantes no buffer (caso ultimo chunk sem \n)
+      if (buffer.trim()) {
+        processLine(buffer);
       }
 
       if (fullText.length > 50) {
         setResult(fullText);
         setHistory(saveToHistory(data, fullText));
       } else {
-        throw new Error("Resposta muito curta ou vazia. A API pode estar instável. Tente novamente.");
+        throw new Error("Resposta vazia ou muito curta. A API pode estar instável ou sobrecarregada.");
       }
     } catch (err) {
       if (err.name === "AbortError") {
         setError("Geração cancelada pelo usuário.");
       } else {
-        setError(`Erro ao gerar projeto: ${err.message}. Tente novamente.`);
+        setError(`Erro ao gerar projeto: ${err.message}`);
       }
     } finally {
       clearInterval(timerRef.current);
