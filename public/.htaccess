@@ -1,0 +1,12 @@
+RewriteEngine On
+
+# Se o arquivo ou diretório existe, serve diretamente
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# API PHP - serve diretamente
+RewriteRule ^api/generate$ api/generate.php [L,QSA]
+
+# SPA fallback - redireciona tudo para index.html
+RewriteRule ^ index.html [L]
