@@ -67,7 +67,8 @@ if (!$input || empty($input['messages'])) {
 
 // Prepara a requisição para a Anthropic
 $payload = json_encode([
-    'model' => 'claude-sonnet-4-5-20250514',
+    'model' => 'claude-sonnet-4-20250514',
+
     'max_tokens' => isset($input['max_tokens']) ? (int)$input['max_tokens'] : 8000,
     'system' => $input['system'] ?? '',
     'messages' => $input['messages'],
