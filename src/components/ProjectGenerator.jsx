@@ -49,8 +49,12 @@ export default function ProjectGenerator() {
   const [showIntro, setShowIntro] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState([]);
+  const [streamText, setStreamText] = useState("");
+  const [elapsedTime, setElapsedTime] = useState(0);
   const resultRef = useRef(null);
   const inputRef = useRef(null);
+  const timerRef = useRef(null);
+  const streamRef = useRef(null);
 
   useEffect(() => {
     setHistory(loadHistory());
@@ -91,6 +95,13 @@ export default function ProjectGenerator() {
     setGenerating(true);
     setError("");
     setResult("");
+    setStreamText("");
+    setElapsedTime(0);
+
+    const startTime = Date.now();
+    timerRef.current = setInterval(() => {
+      setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
+    }, 1000);
 
     const systemPrompt = `Você é um Arquiteto de Projetos Claude especialista. Sua função é transformar ideias brutas em projetos completos e estruturados, prontos para execução no Claude Cowork ou Claude Code.
 
@@ -144,29 +155,85 @@ Sugira conexões/plugins úteis do Cowork e boas práticas específicas para est
 Por favor, gere o projeto completo e estruturado seguindo todas as seções solicitadas (A até H).`;
 
     try {
+      const controller = new AbortController();
+      streamRef.current = controller;
+
       const response = await fetch("/api/generate.php", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
         body: JSON.stringify({
           system: systemPrompt,
           messages: [{ role: "user", content: userMessage }],
           max_tokens: 8000,
+          stream: true,
         }),
       });
 
       if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.error || `Erro na API: ${response.status}`);
+        const errText = await response.text();
+        let errMsg;
+        try { errMsg = JSON.parse(errText).error?.message || JSON.parse(errText).error; } catch { errMsg = errText; }
+        throw new Error(errMsg || `Erro na API: ${response.status}`);
       }
 
-      const responseData = await response.json();
-      const text = responseData.content?.map(b => b.text || "").join("\n") || "Erro ao processar resposta.";
-      setResult(text);
-      setHistory(saveToHistory(data, text));
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullText = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const jsonStr = line.slice(6).trim();
+          if (!jsonStr || jsonStr === "[DONE]") continue;
+
+          try {
+            const event = JSON.parse(jsonStr);
+            if (event.type === "content_block_delta" && event.delta?.type === "text_delta") {
+              fullText += event.delta.text;
+              setStreamText(fullText);
+            }
+            if (event.type === "error") {
+              throw new Error(event.error?.message || "Erro retornado pela API");
+            }
+          } catch (parseErr) {
+            if (parseErr.message.includes("Erro retornado")) throw parseErr;
+          }
+        }
+      }
+
+      if (fullText.length > 50) {
+        setResult(fullText);
+        setHistory(saveToHistory(data, fullText));
+      } else {
+        throw new Error("Resposta muito curta ou vazia. A API pode estar instável. Tente novamente.");
+      }
     } catch (err) {
-      setError(`Erro ao gerar projeto: ${err.message}. Tente novamente.`);
+      if (err.name === "AbortError") {
+        setError("Geração cancelada pelo usuário.");
+      } else {
+        setError(`Erro ao gerar projeto: ${err.message}. Tente novamente.`);
+      }
     } finally {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+      streamRef.current = null;
       setGenerating(false);
+      setStreamText("");
+    }
+  };
+
+  const cancelGeneration = () => {
+    if (streamRef.current) {
+      streamRef.current.abort();
     }
   };
 
@@ -544,17 +611,98 @@ Por favor, gere o projeto completo e estruturado seguindo todas as seções soli
       </div>
 
       {generating && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.95)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ width: "56px", height: "56px", border: "3px solid #1e3a5f", borderTop: "3px solid #38bdf8", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 24px" }} />
-            <h3 style={{ color: "#f0f9ff", fontSize: "22px", fontWeight: 700, marginBottom: "8px" }}>
-              Gerando seu projeto...
-            </h3>
-            <p style={{ color: "#64748b", fontSize: "14px" }}>
-              O Claude está criando toda a estrutura, prompts e documentos.
-            </p>
-            <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.97)", display: "flex", flexDirection: "column", zIndex: 50, overflow: "hidden" }}>
+          <div style={{ padding: "24px 24px 0", maxWidth: "800px", margin: "0 auto", width: "100%", boxSizing: "border-box" }}>
+            <div style={{ textAlign: "center", marginBottom: "20px" }}>
+              <h3 style={{ color: "#f0f9ff", fontSize: "22px", fontWeight: 700, marginBottom: "8px" }}>
+                {streamText ? "✍️ Gerando seu projeto..." : "⏳ Conectando com o Claude..."}
+              </h3>
+              <p style={{ color: "#64748b", fontSize: "14px" }}>
+                {streamText
+                  ? `${streamText.split("\n").filter(l => l.startsWith("## ")).length} seções geradas · ${(streamText.length / 1024).toFixed(1)} KB · ${elapsedTime}s`
+                  : elapsedTime > 10
+                    ? `A API pode estar lenta hoje. Aguardando... ${elapsedTime}s`
+                    : `Aguardando resposta da API... ${elapsedTime}s`
+                }
+              </p>
+            </div>
+
+            <div style={{ marginBottom: "16px" }}>
+              <div style={{ height: "6px", background: "#1e293b", borderRadius: "6px", overflow: "hidden" }}>
+                <div style={{
+                  height: "100%",
+                  width: streamText ? `${Math.min(95, (streamText.length / 7000) * 100)}%` : `${Math.min(15, elapsedTime * 1.5)}%`,
+                  background: "linear-gradient(90deg, #0ea5e9, #38bdf8, #0ea5e9)",
+                  backgroundSize: "200% 100%",
+                  animation: "shimmer 2s linear infinite",
+                  borderRadius: "6px",
+                  transition: "width 0.5s ease"
+                }} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "8px" }}>
+                <span style={{ color: "#475569", fontSize: "12px" }}>
+                  {streamText ? `${streamText.length.toLocaleString()} caracteres recebidos` : "Iniciando stream..."}
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <span style={{ color: "#475569", fontSize: "12px" }}>⏱ {elapsedTime}s</span>
+                  <button
+                    onClick={cancelGeneration}
+                    style={{ background: "rgba(239, 68, 68, 0.1)", color: "#f87171", border: "1px solid rgba(239, 68, 68, 0.25)", padding: "4px 14px", borderRadius: "6px", fontSize: "12px", fontWeight: 600, cursor: "pointer" }}
+                  >
+                    ✕ Cancelar
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {streamText && (
+              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "12px" }}>
+                {streamText.split("\n").filter(l => l.startsWith("## ")).map((section, i) => (
+                  <span key={i} style={{ background: "rgba(34, 197, 94, 0.1)", border: "1px solid rgba(34, 197, 94, 0.2)", color: "#22c55e", padding: "3px 10px", borderRadius: "12px", fontSize: "11px", fontWeight: 600 }}>
+                    ✓ {section.replace("## ", "").substring(0, 30)}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
+
+          <div style={{ flex: 1, maxWidth: "800px", margin: "0 auto", width: "100%", padding: "0 24px 24px", overflow: "hidden", boxSizing: "border-box", minHeight: 0 }}>
+            {streamText ? (
+              <div style={{
+                background: "rgba(15, 23, 42, 0.6)",
+                border: "1px solid #1e3a5f",
+                borderRadius: "12px",
+                padding: "20px",
+                height: "100%",
+                overflowY: "auto",
+                fontSize: "13px",
+                lineHeight: "1.7",
+                color: "#94a3b8",
+                fontFamily: "'JetBrains Mono', 'Fira Code', 'Courier New', monospace",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+              }}
+              ref={el => { if (el) el.scrollTop = el.scrollHeight; }}
+              >
+                {streamText}
+                <span style={{ animation: "blink 1s step-end infinite", color: "#38bdf8" }}>▌</span>
+              </div>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%" }}>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ width: "48px", height: "48px", border: "3px solid #1e3a5f", borderTop: "3px solid #38bdf8", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 16px" }} />
+                  <p style={{ color: "#64748b", fontSize: "14px", marginBottom: "4px" }}>Preparando geração do projeto...</p>
+                  <p style={{ color: "#475569", fontSize: "12px" }}>O texto aparecerá em tempo real assim que o Claude começar a responder</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <style>{`
+            @keyframes spin { to { transform: rotate(360deg) } }
+            @keyframes blink { 50% { opacity: 0 } }
+            @keyframes shimmer { 0% { background-position: 200% 0 } 100% { background-position: -200% 0 } }
+          `}</style>
         </div>
       )}
 
