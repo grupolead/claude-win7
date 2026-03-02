@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 
 const STEPS = [
-  { key: "ideia", label: "Sua Ideia", emoji: "\u{1F4A1}", placeholder: "Descreva sua ideia em 2-3 frases. Ex: Criar uma landing page para servi\u00e7o de coleta domiciliar de exames...", question: "Qual \u00e9 sua ideia? Descreva em poucas frases o que voc\u00ea quer criar." },
-  { key: "objetivo", label: "Objetivo", emoji: "\u{1F3AF}", placeholder: "O que ser\u00e1 'sucesso'? Ex: Paciente preencher formul\u00e1rio e solicitar coleta. Meta: 50 leads/m\u00eas...", question: "O que ser\u00e1 'sucesso'? Como 'pronto' se parece para voc\u00ea?" },
-  { key: "publico", label: "P\u00fablico", emoji: "\u{1F465}", placeholder: "Para quem \u00e9 isso? Ex: Empresas que precisam de exames para funcion\u00e1rios e pessoas f\u00edsicas...", question: "Para quem \u00e9 isso? Quem vai usar, ver ou comprar?" },
-  { key: "recursos", label: "Recursos", emoji: "\u{1F4E6}", placeholder: "O que voc\u00ea j\u00e1 tem? Ex: Logomarca, fotos da equipe, lista de servi\u00e7os, or\u00e7amento de R$2.000...", question: "O que voc\u00ea j\u00e1 tem dispon\u00edvel? (textos, imagens, dados, refer\u00eancias, or\u00e7amento)" },
-  { key: "prazo", label: "Prazo e Formato", emoji: "\u{1F4C5}", placeholder: "Ex: Preciso em 1 semana. Formato: site HTML responsivo com formul\u00e1rio de contato...", question: "Quando precisa estar pronto? Em qual formato de entrega? (site, documento, apresenta\u00e7\u00e3o, app, outro)" },
+  { key: "ideia", label: "Sua Ideia", emoji: "💡", placeholder: "Descreva sua ideia em 2-3 frases. Ex: Criar uma landing page para serviço de coleta domiciliar de exames...", question: "Qual é sua ideia? Descreva em poucas frases o que você quer criar." },
+  { key: "objetivo", label: "Objetivo", emoji: "🎯", placeholder: "O que será 'sucesso'? Ex: Paciente preencher formulário e solicitar coleta. Meta: 50 leads/mês...", question: "O que será 'sucesso'? Como 'pronto' se parece para você?" },
+  { key: "publico", label: "Público", emoji: "👥", placeholder: "Para quem é isso? Ex: Empresas que precisam de exames para funcionários e pessoas físicas...", question: "Para quem é isso? Quem vai usar, ver ou comprar?" },
+  { key: "recursos", label: "Recursos", emoji: "📦", placeholder: "O que você já tem? Ex: Logomarca, fotos da equipe, lista de serviços, orçamento de R$2.000...", question: "O que você já tem disponível? (textos, imagens, dados, referências, orçamento)" },
+  { key: "prazo", label: "Prazo e Formato", emoji: "📅", placeholder: "Ex: Preciso em 1 semana. Formato: site HTML responsivo com formulário de contato...", question: "Quando precisa estar pronto? Em qual formato de entrega? (site, documento, apresentação, app, outro)" },
 ];
 
 const GRADIENT = "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)";
@@ -57,56 +57,56 @@ export default function ProjectGenerator() {
     setError("");
     setResult("");
 
-    const systemPrompt = `Voc\u00ea \u00e9 um Arquiteto de Projetos Claude especialista. Sua fun\u00e7\u00e3o \u00e9 transformar ideias brutas em projetos completos e estruturados, prontos para execu\u00e7\u00e3o no Claude Cowork ou Claude Code.
+    const systemPrompt = `Você é um Arquiteto de Projetos Claude especialista. Sua função é transformar ideias brutas em projetos completos e estruturados, prontos para execução no Claude Cowork ou Claude Code.
 
-IMPORTANTE: Responda INTEIRAMENTE em Portugu\u00eas Brasileiro. Use formata\u00e7\u00e3o Markdown rica.
+IMPORTANTE: Responda INTEIRAMENTE em Português Brasileiro. Use formatação Markdown rica.
 
-Com base nas respostas do usu\u00e1rio, gere TUDO abaixo:
+Com base nas respostas do usuário, gere TUDO abaixo:
 
-## \u{1F4C1} A) Estrutura de Pastas
-\u00c1rvore de diret\u00f3rios completa do projeto usando formato visual.
+## 📁 A) Estrutura de Pastas
+Árvore de diretórios completa do projeto usando formato visual.
 
-## \u{1F4CB} B) _MANIFEST.md
-Com Tier 1 (fontes de verdade), Tier 2 (dom\u00ednios espec\u00edficos) e Tier 3 (arquivo morto).
+## 📋 B) _MANIFEST.md
+Com Tier 1 (fontes de verdade), Tier 2 (domínios específicos) e Tier 3 (arquivo morto).
 
-## \u{1F4C4} C) briefing-projeto.md
-Documento com: vis\u00e3o geral, objetivos SMART, p\u00fablico-alvo detalhado, escopo, entreg\u00e1veis, cronograma, m\u00e9tricas de sucesso.
+## 📄 C) briefing-projeto.md
+Documento com: visão geral, objetivos SMART, público-alvo detalhado, escopo, entregáveis, cronograma, métricas de sucesso.
 
-## \u2699\uFE0F D) instrucoes-pasta.md
-Instru\u00e7\u00f5es espec\u00edficas de pasta (Folder Instructions) com regras, terminologia e formatos do projeto.
+## ⚙️ D) instrucoes-pasta.md
+Instruções específicas de pasta (Folder Instructions) com regras, terminologia e formatos do projeto.
 
-## \u{1F680} E) Prompts de Execu\u00e7\u00e3o
-Crie um prompt espec\u00edfico e DETALHADO para CADA FASE do projeto. Cada prompt deve conter:
+## 🚀 E) Prompts de Execução
+Crie um prompt específico e DETALHADO para CADA FASE do projeto. Cada prompt deve conter:
 - O que "pronto" se parece
-- Restri\u00e7\u00f5es claras
+- Restrições claras
 - Tratamento de incerteza
-- Formato de sa\u00edda
-- Conex\u00e3o com fase anterior e pr\u00f3xima
+- Formato de saída
+- Conexão com fase anterior e próxima
 
-Os prompts devem ser autocontidos \u2014 funcionam sem explicar o sistema ao Claude.
+Os prompts devem ser autocontidos — funcionam sem explicar o sistema ao Claude.
 
-## \u{1F527} F) Skills do Projeto
-Se houver tarefas repet\u00edveis, crie arquivos .md de skill prontos para uso.
+## 🔧 F) Skills do Projeto
+Se houver tarefas repetíveis, crie arquivos .md de skill prontos para uso.
 
-## \u2705 G) Checklist de Execu\u00e7\u00e3o
+## ✅ G) Checklist de Execução
 Lista ordenada de tudo que precisa ser feito, indicando qual prompt usar em cada etapa.
 
-## \u{1F4A1} H) Dicas de Otimiza\u00e7\u00e3o
-Sugira conex\u00f5es/plugins \u00fateis do Cowork e boas pr\u00e1ticas espec\u00edficas para este projeto.`;
+## 💡 H) Dicas de Otimização
+Sugira conexões/plugins úteis do Cowork e boas práticas específicas para este projeto.`;
 
-    const userMessage = `Aqui est\u00e3o as respostas do usu\u00e1rio para o projeto:
+    const userMessage = `Aqui estão as respostas do usuário para o projeto:
 
-**\u{1F4A1} IDEIA:** ${data.ideia}
+**💡 IDEIA:** ${data.ideia}
 
-**\u{1F3AF} OBJETIVO:** ${data.objetivo}
+**🎯 OBJETIVO:** ${data.objetivo}
 
-**\u{1F465} P\u00daBLICO:** ${data.publico}
+**👥 PÚBLICO:** ${data.publico}
 
-**\u{1F4E6} RECURSOS DISPON\u00cdVEIS:** ${data.recursos}
+**📦 RECURSOS DISPONÍVEIS:** ${data.recursos}
 
-**\u{1F4C5} PRAZO E FORMATO:** ${data.prazo}
+**📅 PRAZO E FORMATO:** ${data.prazo}
 
-Por favor, gere o projeto completo e estruturado seguindo todas as se\u00e7\u00f5es solicitadas (A at\u00e9 H).`;
+Por favor, gere o projeto completo e estruturado seguindo todas as seções solicitadas (A até H).`;
 
     try {
       const response = await fetch("/api/generate.php", {
@@ -223,23 +223,23 @@ Por favor, gere o projeto completo e estruturado seguindo todas as se\u00e7\u00f
     return (
       <div style={{ minHeight: "100vh", background: GRADIENT, display: "flex", alignItems: "center", justifyContent: "center", padding: "24px", fontFamily: "'Segoe UI', system-ui, sans-serif" }}>
         <div style={{ maxWidth: "640px", textAlign: "center" }}>
-          <div style={{ fontSize: "64px", marginBottom: "24px" }}>{"\u{1F3D7}\uFE0F"}</div>
+          <div style={{ fontSize: "64px", marginBottom: "24px" }}>🏗️</div>
           <h1 style={{ fontSize: "36px", fontWeight: 800, color: "#f0f9ff", marginBottom: "12px", letterSpacing: "-0.5px" }}>
             Gerador de Projetos Claude
           </h1>
           <p style={{ fontSize: "18px", color: "#94a3b8", marginBottom: "8px", lineHeight: "1.6" }}>
             Transforme qualquer ideia em um projeto completo e estruturado.
-            <br />Basta descrever o que voc\u00ea quer &mdash; o Claude cria tudo.
+            <br />Basta descrever o que você quer &mdash; o Claude cria tudo.
           </p>
           <p style={{ fontSize: "13px", color: "#475569", marginBottom: "32px" }}>
-            por Win7 Ag\u00eancia de Marketing Digital
+            por Win7 Agência de Marketing Digital
           </p>
 
           <div style={{ background: "rgba(56, 189, 248, 0.08)", border: "1px solid rgba(56, 189, 248, 0.2)", borderRadius: "16px", padding: "28px", marginBottom: "32px", textAlign: "left" }}>
-            <p style={{ color: "#7dd3fc", fontWeight: 600, fontSize: "15px", marginBottom: "16px" }}>O que ser\u00e1 gerado automaticamente:</p>
-            {["Estrutura de pastas do projeto", "Manifest de prioridades (_MANIFEST.md)", "Briefing completo com objetivos SMART", "Prompts prontos para cada fase de execu\u00e7\u00e3o", "Skills reutiliz\u00e1veis para tarefas repetitivas", "Checklist ordenado de implementa\u00e7\u00e3o"].map((item, i) => (
+            <p style={{ color: "#7dd3fc", fontWeight: 600, fontSize: "15px", marginBottom: "16px" }}>O que será gerado automaticamente:</p>
+            {["Estrutura de pastas do projeto", "Manifest de prioridades (_MANIFEST.md)", "Briefing completo com objetivos SMART", "Prompts prontos para cada fase de execução", "Skills reutilizáveis para tarefas repetitivas", "Checklist ordenado de implementação"].map((item, i) => (
               <div key={i} style={{ display: "flex", gap: "10px", alignItems: "center", marginBottom: "8px" }}>
-                <span style={{ color: "#22d3ee", fontSize: "14px" }}>{"\u2713"}</span>
+                <span style={{ color: "#22d3ee", fontSize: "14px" }}>✓</span>
                 <span style={{ color: "#cbd5e1", fontSize: "14px" }}>{item}</span>
               </div>
             ))}
@@ -251,11 +251,11 @@ Por favor, gere o projeto completo e estruturado seguindo todas as se\u00e7\u00f
             onMouseOver={e => e.target.style.transform = "translateY(-2px)"}
             onMouseOut={e => e.target.style.transform = "translateY(0)"}
           >
-            Come\u00e7ar &rarr;
+            Começar →
           </button>
 
           <p style={{ color: "#475569", fontSize: "12px", marginTop: "20px" }}>
-            Responda 5 perguntas r\u00e1pidas. O Claude faz o resto.
+            Responda 5 perguntas rápidas. O Claude faz o resto.
           </p>
         </div>
       </div>
@@ -269,14 +269,14 @@ Por favor, gere o projeto completo e estruturado seguindo todas as se\u00e7\u00f
         <div style={{ maxWidth: "900px", margin: "0 auto", padding: "24px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
             <h1 style={{ fontSize: "22px", fontWeight: 700, color: "#f0f9ff" }}>
-              {"\u{1F3D7}\uFE0F"} Seu Projeto Gerado
+              🏗️ Seu Projeto Gerado
             </h1>
             <div style={{ display: "flex", gap: "10px" }}>
               <button onClick={() => navigator.clipboard.writeText(result)} style={{ background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", border: "1px solid rgba(56, 189, 248, 0.3)", padding: "8px 20px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
-                {"\u{1F4CB}"} Copiar Tudo
+                📋 Copiar Tudo
               </button>
               <button onClick={resetAll} style={{ background: "rgba(248, 113, 113, 0.15)", color: "#f87171", border: "1px solid rgba(248, 113, 113, 0.3)", padding: "8px 20px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
-                {"\u21A9"} Novo Projeto
+                ↩ Novo Projeto
               </button>
             </div>
           </div>
@@ -318,7 +318,7 @@ Por favor, gere o projeto completo e estruturado seguindo todas as se\u00e7\u00f
               <div key={i} style={{ display: "flex", alignItems: "center", gap: "4px", padding: "4px 10px", borderRadius: "20px", fontSize: "12px", background: i === currentStep ? "rgba(56, 189, 248, 0.15)" : i < currentStep ? "rgba(34, 197, 94, 0.1)" : "transparent", border: `1px solid ${i === currentStep ? "rgba(56, 189, 248, 0.3)" : i < currentStep ? "rgba(34, 197, 94, 0.2)" : "rgba(100, 116, 139, 0.2)"}`, color: i === currentStep ? "#38bdf8" : i < currentStep ? "#22c55e" : "#475569", cursor: i < currentStep ? "pointer" : "default", transition: "all 0.2s" }} onClick={() => { if (i < currentStep) setCurrentStep(i); }}>
                 <span>{s.emoji}</span>
                 <span style={{ fontWeight: 500 }}>{s.label}</span>
-                {i < currentStep && <span>{"\u2713"}</span>}
+                {i < currentStep && <span>✓</span>}
               </div>
             ))}
           </div>
@@ -333,12 +333,12 @@ Por favor, gere o projeto completo e estruturado seguindo todas as se\u00e7\u00f
             {step.question}
           </h2>
           <p style={{ color: "#64748b", fontSize: "14px", marginBottom: "24px" }}>
-            Quanto mais detalhes, melhor ser\u00e1 o projeto gerado.
+            Quanto mais detalhes, melhor será o projeto gerado.
           </p>
 
           {currentStep > 0 && (
             <div style={{ background: "rgba(34, 197, 94, 0.06)", border: "1px solid rgba(34, 197, 94, 0.15)", borderRadius: "10px", padding: "12px 16px", marginBottom: "20px", fontSize: "13px" }}>
-              <span style={{ color: "#22c55e", fontWeight: 600 }}>{"\u2713"} {STEPS[currentStep - 1].emoji} {STEPS[currentStep - 1].label}:</span>
+              <span style={{ color: "#22c55e", fontWeight: 600 }}>✓ {STEPS[currentStep - 1].emoji} {STEPS[currentStep - 1].label}:</span>
               <span style={{ color: "#94a3b8", marginLeft: "8px" }}>{answers[STEPS[currentStep - 1].key]}</span>
             </div>
           )}
@@ -363,7 +363,7 @@ Por favor, gere o projeto completo e estruturado seguindo todas as se\u00e7\u00f
               disabled={currentStep === 0}
               style={{ background: "transparent", color: currentStep === 0 ? "#334155" : "#64748b", border: "1px solid rgba(100, 116, 139, 0.2)", padding: "10px 24px", borderRadius: "10px", fontSize: "14px", cursor: currentStep === 0 ? "default" : "pointer", fontWeight: 500 }}
             >
-              &larr; Voltar
+              ← Voltar
             </button>
 
             <button
@@ -371,12 +371,12 @@ Por favor, gere o projeto completo e estruturado seguindo todas as se\u00e7\u00f
               disabled={!inputValue.trim()}
               style={{ background: inputValue.trim() ? "linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%)" : "#1e293b", color: inputValue.trim() ? "#fff" : "#475569", border: "none", padding: "12px 32px", borderRadius: "10px", fontSize: "15px", fontWeight: 700, cursor: inputValue.trim() ? "pointer" : "default", transition: "all 0.2s", boxShadow: inputValue.trim() ? "0 4px 16px rgba(14, 165, 233, 0.25)" : "none" }}
             >
-              {currentStep === STEPS.length - 1 ? "\u{1F680} Gerar Projeto" : "Pr\u00f3ximo \u2192"}
+              {currentStep === STEPS.length - 1 ? "🚀 Gerar Projeto" : "Próximo →"}
             </button>
           </div>
 
           <p style={{ color: "#334155", fontSize: "12px", marginTop: "12px", textAlign: "center" }}>
-            Enter para avan\u00e7ar &bull; Shift+Enter para nova linha
+            Enter para avançar • Shift+Enter para nova linha
           </p>
         </div>
       </div>
@@ -389,7 +389,7 @@ Por favor, gere o projeto completo e estruturado seguindo todas as se\u00e7\u00f
               Gerando seu projeto...
             </h3>
             <p style={{ color: "#64748b", fontSize: "14px" }}>
-              O Claude est\u00e1 criando toda a estrutura, prompts e documentos.
+              O Claude está criando toda a estrutura, prompts e documentos.
             </p>
             <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
           </div>
@@ -399,7 +399,7 @@ Por favor, gere o projeto completo e estruturado seguindo todas as se\u00e7\u00f
       {error && (
         <div style={{ position: "fixed", bottom: "24px", left: "50%", transform: "translateX(-50%)", background: "rgba(239, 68, 68, 0.15)", border: "1px solid rgba(239, 68, 68, 0.3)", borderRadius: "12px", padding: "14px 24px", color: "#f87171", fontSize: "14px", zIndex: 50, maxWidth: "90vw" }}>
           {error}
-          <button onClick={() => setError("")} style={{ marginLeft: "16px", background: "none", border: "none", color: "#f87171", cursor: "pointer", fontWeight: 700 }}>{"\u2715"}</button>
+          <button onClick={() => setError("")} style={{ marginLeft: "16px", background: "none", border: "none", color: "#f87171", cursor: "pointer", fontWeight: 700 }}>✕</button>
         </div>
       )}
     </div>
