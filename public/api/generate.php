@@ -21,11 +21,20 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit;
 }
 
-// Carrega a chave da API de um arquivo .env no diretório pai (fora do public)
-$envFile = dirname(__DIR__) . '/.env';
+// Carrega a chave da API de um arquivo .env
+// Busca em: pasta pai do api/ → pasta pai do subdominio → /home/pages
 $apiKey = '';
+$envPaths = [
+    dirname(__DIR__) . '/.env',           // /home/pages/public_html/claude/.env
+    dirname(dirname(__DIR__)) . '/.env',  // /home/pages/public_html/.env
+    '/home/pages/.env',                    // home do usuario
+];
+$envFile = null;
+foreach ($envPaths as $path) {
+    if (file_exists($path)) { $envFile = $path; break; }
+}
 
-if (file_exists($envFile)) {
+if ($envFile) {
     $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     foreach ($lines as $line) {
         if (strpos($line, '#') === 0) continue;
