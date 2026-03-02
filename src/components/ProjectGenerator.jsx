@@ -10,6 +10,35 @@ const STEPS = [
 
 const GRADIENT = "linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)";
 
+const HISTORY_KEY = "claude-project-history";
+
+function loadHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+  } catch { return []; }
+}
+
+function saveToHistory(answers, result) {
+  const history = loadHistory();
+  const entry = {
+    id: Date.now(),
+    date: new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }),
+    title: answers.ideia?.substring(0, 80) || "Projeto sem título",
+    answers,
+    result,
+  };
+  history.unshift(entry);
+  if (history.length > 50) history.length = 50;
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  return history;
+}
+
+function deleteFromHistory(id) {
+  const history = loadHistory().filter(h => h.id !== id);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  return history;
+}
+
 export default function ProjectGenerator() {
   const [currentStep, setCurrentStep] = useState(0);
   const [answers, setAnswers] = useState({});
@@ -18,8 +47,14 @@ export default function ProjectGenerator() {
   const [result, setResult] = useState("");
   const [error, setError] = useState("");
   const [showIntro, setShowIntro] = useState(true);
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState([]);
   const resultRef = useRef(null);
   const inputRef = useRef(null);
+
+  useEffect(() => {
+    setHistory(loadHistory());
+  }, []);
 
   useEffect(() => {
     if (inputRef.current && !showIntro && !result) {
@@ -127,6 +162,7 @@ Por favor, gere o projeto completo e estruturado seguindo todas as seções soli
       const responseData = await response.json();
       const text = responseData.content?.map(b => b.text || "").join("\n") || "Erro ao processar resposta.";
       setResult(text);
+      setHistory(saveToHistory(data, text));
     } catch (err) {
       setError(`Erro ao gerar projeto: ${err.message}. Tente novamente.`);
     } finally {
@@ -141,6 +177,20 @@ Por favor, gere o projeto completo e estruturado seguindo todas as seções soli
     setResult("");
     setError("");
     setShowIntro(true);
+    setShowHistory(false);
+  };
+
+  const loadFromHistory = (entry) => {
+    setAnswers(entry.answers);
+    setResult(entry.result);
+    setShowIntro(false);
+    setShowHistory(false);
+    setCurrentStep(STEPS.length - 1);
+  };
+
+  const handleDeleteHistory = (id, e) => {
+    e.stopPropagation();
+    setHistory(deleteFromHistory(id));
   };
 
   const renderMarkdown = (text) => {
@@ -257,7 +307,68 @@ Por favor, gere o projeto completo e estruturado seguindo todas as seções soli
           <p style={{ color: "#475569", fontSize: "12px", marginTop: "20px" }}>
             Responda 5 perguntas rápidas. O Claude faz o resto.
           </p>
+
+          {history.length > 0 && (
+            <button
+              onClick={() => setShowHistory(true)}
+              style={{ marginTop: "16px", background: "rgba(148, 163, 184, 0.1)", color: "#94a3b8", border: "1px solid rgba(148, 163, 184, 0.2)", padding: "10px 24px", borderRadius: "10px", fontSize: "14px", fontWeight: 500, cursor: "pointer", transition: "all 0.2s" }}
+              onMouseOver={e => e.target.style.borderColor = "rgba(148, 163, 184, 0.4)"}
+              onMouseOut={e => e.target.style.borderColor = "rgba(148, 163, 184, 0.2)"}
+            >
+              📂 Histórico ({history.length} {history.length === 1 ? "projeto" : "projetos"})
+            </button>
+          )}
         </div>
+
+        {/* History Drawer */}
+        {showHistory && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex" }}>
+            <div onClick={() => setShowHistory(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)" }} />
+            <div style={{ position: "relative", marginLeft: "auto", width: "100%", maxWidth: "440px", background: "#0f172a", borderLeft: "1px solid #1e3a5f", height: "100vh", overflowY: "auto", padding: "24px", animation: "slideIn 0.2s ease" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
+                <h2 style={{ color: "#f0f9ff", fontSize: "20px", fontWeight: 700 }}>📂 Histórico de Projetos</h2>
+                <button onClick={() => setShowHistory(false)} style={{ background: "none", border: "none", color: "#64748b", fontSize: "24px", cursor: "pointer", padding: "4px" }}>✕</button>
+              </div>
+              {history.length === 0 ? (
+                <p style={{ color: "#475569", textAlign: "center", marginTop: "48px" }}>Nenhum projeto gerado ainda.</p>
+              ) : (
+                history.map(entry => (
+                  <div
+                    key={entry.id}
+                    onClick={() => loadFromHistory(entry)}
+                    style={{ background: "rgba(30, 41, 59, 0.6)", border: "1px solid #1e3a5f", borderRadius: "12px", padding: "16px", marginBottom: "12px", cursor: "pointer", transition: "all 0.2s" }}
+                    onMouseOver={e => e.currentTarget.style.borderColor = "rgba(56, 189, 248, 0.4)"}
+                    onMouseOut={e => e.currentTarget.style.borderColor = "#1e3a5f"}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <p style={{ color: "#e2e8f0", fontSize: "14px", fontWeight: 600, marginBottom: "4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          💡 {entry.title}
+                        </p>
+                        <p style={{ color: "#64748b", fontSize: "12px" }}>{entry.date}</p>
+                      </div>
+                      <button
+                        onClick={(e) => handleDeleteHistory(entry.id, e)}
+                        style={{ background: "none", border: "none", color: "#475569", fontSize: "16px", cursor: "pointer", padding: "2px 6px", borderRadius: "4px", flexShrink: 0 }}
+                        onMouseOver={e => e.target.style.color = "#f87171"}
+                        onMouseOut={e => e.target.style.color = "#475569"}
+                        title="Excluir do histórico"
+                      >
+                        🗑
+                      </button>
+                    </div>
+                    {entry.answers.objetivo && (
+                      <p style={{ color: "#94a3b8", fontSize: "12px", marginTop: "8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        🎯 {entry.answers.objetivo}
+                      </p>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+            <style>{`@keyframes slideIn { from { transform: translateX(100%) } to { transform: translateX(0) } }`}</style>
+          </div>
+        )}
       </div>
     );
   }
@@ -275,6 +386,11 @@ Por favor, gere o projeto completo e estruturado seguindo todas as seções soli
               <button onClick={() => navigator.clipboard.writeText(result)} style={{ background: "rgba(56, 189, 248, 0.15)", color: "#38bdf8", border: "1px solid rgba(56, 189, 248, 0.3)", padding: "8px 20px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
                 📋 Copiar Tudo
               </button>
+              {history.length > 0 && (
+                <button onClick={() => setShowHistory(true)} style={{ background: "rgba(148, 163, 184, 0.1)", color: "#94a3b8", border: "1px solid rgba(148, 163, 184, 0.2)", padding: "8px 20px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+                  📂 Histórico
+                </button>
+              )}
               <button onClick={resetAll} style={{ background: "rgba(248, 113, 113, 0.15)", color: "#f87171", border: "1px solid rgba(248, 113, 113, 0.3)", padding: "8px 20px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
                 ↩ Novo Projeto
               </button>
@@ -293,6 +409,52 @@ Por favor, gere o projeto completo e estruturado seguindo todas as seções soli
             {renderMarkdown(result)}
           </div>
         </div>
+
+        {/* History Drawer on Result */}
+        {showHistory && (
+          <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex" }}>
+            <div onClick={() => setShowHistory(false)} style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.6)" }} />
+            <div style={{ position: "relative", marginLeft: "auto", width: "100%", maxWidth: "440px", background: "#0f172a", borderLeft: "1px solid #1e3a5f", height: "100vh", overflowY: "auto", padding: "24px", animation: "slideIn 0.2s ease" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
+                <h2 style={{ color: "#f0f9ff", fontSize: "20px", fontWeight: 700 }}>📂 Histórico de Projetos</h2>
+                <button onClick={() => setShowHistory(false)} style={{ background: "none", border: "none", color: "#64748b", fontSize: "24px", cursor: "pointer", padding: "4px" }}>✕</button>
+              </div>
+              {history.map(entry => (
+                <div
+                  key={entry.id}
+                  onClick={() => loadFromHistory(entry)}
+                  style={{ background: "rgba(30, 41, 59, 0.6)", border: "1px solid #1e3a5f", borderRadius: "12px", padding: "16px", marginBottom: "12px", cursor: "pointer", transition: "all 0.2s" }}
+                  onMouseOver={e => e.currentTarget.style.borderColor = "rgba(56, 189, 248, 0.4)"}
+                  onMouseOut={e => e.currentTarget.style.borderColor = "#1e3a5f"}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ color: "#e2e8f0", fontSize: "14px", fontWeight: 600, marginBottom: "4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        💡 {entry.title}
+                      </p>
+                      <p style={{ color: "#64748b", fontSize: "12px" }}>{entry.date}</p>
+                    </div>
+                    <button
+                      onClick={(e) => handleDeleteHistory(entry.id, e)}
+                      style={{ background: "none", border: "none", color: "#475569", fontSize: "16px", cursor: "pointer", padding: "2px 6px", borderRadius: "4px", flexShrink: 0 }}
+                      onMouseOver={e => e.target.style.color = "#f87171"}
+                      onMouseOut={e => e.target.style.color = "#475569"}
+                      title="Excluir do histórico"
+                    >
+                      🗑
+                    </button>
+                  </div>
+                  {entry.answers.objetivo && (
+                    <p style={{ color: "#94a3b8", fontSize: "12px", marginTop: "8px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      🎯 {entry.answers.objetivo}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+            <style>{`@keyframes slideIn { from { transform: translateX(100%) } to { transform: translateX(0) } }`}</style>
+          </div>
+        )}
       </div>
     );
   }
