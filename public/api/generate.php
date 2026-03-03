@@ -2,9 +2,12 @@
 /**
  * Proxy para API Anthropic Claude
  * Suporta modo normal e streaming (SSE)
+ * Retry automático com backoff + fallback de modelo (Haiku → Sonnet)
+ *
+ * Lógica: tenta Haiku 3x, se falhar tenta Sonnet 3x = até 6 tentativas
+ * Só envia headers SSE ao browser quando confirma resposta 200 da Anthropic
  */
 
-// Timeout PHP generoso
 set_time_limit(300);
 ini_set('max_execution_time', 300);
 
@@ -63,99 +66,163 @@ if (!$input || empty($input['messages'])) {
 
 $useStream = !empty($input['stream']);
 
-// Modelo - usar haiku 4.5 para testes (barato e rápido), sonnet para produção
-// Modelos disponíveis na conta:
-// - claude-haiku-4-5-20251001  (mais barato, testes)
-// - claude-sonnet-4-20250514   (produção)
-// - claude-sonnet-4-6          (mais recente)
-$model = 'claude-haiku-4-5-20251001';
+// Modelos: tenta Haiku (barato) primeiro, fallback para Sonnet (confiável)
+$models = [
+    'claude-haiku-4-5-20251001',
+    'claude-sonnet-4-20250514',
+];
+
+$maxRetries = 3;
+$retryDelays = [2, 3, 5]; // segundos entre tentativas
 
 // ========== STREAMING MODE ==========
 if ($useStream) {
-    header('Content-Type: text/event-stream; charset=utf-8');
-    header('Cache-Control: no-cache');
-    header('Connection: keep-alive');
-    header('X-Accel-Buffering: no'); // nginx
-
-    // Desabilita output buffering
+    // Desabilita output buffering para streaming
     while (ob_get_level()) ob_end_flush();
 
-    $payload = json_encode([
-        'model' => $model,
-        'max_tokens' => isset($input['max_tokens']) ? (int)$input['max_tokens'] : 8000,
-        'system' => $input['system'] ?? '',
-        'messages' => $input['messages'],
-        'stream' => true,
-    ]);
+    foreach ($models as $modelIdx => $model) {
+        for ($attempt = 0; $attempt < $maxRetries; $attempt++) {
+            // Delay entre tentativas (exceto primeira do primeiro modelo)
+            if ($attempt > 0 || $modelIdx > 0) {
+                $delay = $retryDelays[min($attempt, count($retryDelays) - 1)];
+                sleep($delay);
+            }
 
-    $ch = curl_init('https://api.anthropic.com/v1/messages');
-    curl_setopt_array($ch, [
-        CURLOPT_POST => true,
-        CURLOPT_POSTFIELDS => $payload,
-        CURLOPT_RETURNTRANSFER => false,
-        CURLOPT_TIMEOUT => 300,
-        CURLOPT_CONNECTTIMEOUT => 30,
-        CURLOPT_HTTPHEADER => [
-            'Content-Type: application/json',
-            'x-api-key: ' . $apiKey,
-            'anthropic-version: 2023-06-01',
-        ],
-        CURLOPT_WRITEFUNCTION => function($ch, $data) {
-            // Forward SSE data direto pro browser
-            echo $data;
-            if (ob_get_level()) ob_flush();
-            flush();
-            return strlen($data);
-        },
-    ]);
+            $payload = json_encode([
+                'model' => $model,
+                'max_tokens' => isset($input['max_tokens']) ? (int)$input['max_tokens'] : 8000,
+                'system' => $input['system'] ?? '',
+                'messages' => $input['messages'],
+                'stream' => true,
+            ]);
 
-    $success = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlError = curl_error($ch);
-    curl_close($ch);
+            $httpCode = 0;
+            $errorBody = '';
+            $headersSent = false;
 
-    if ($curlError) {
-        echo "event: error\ndata: " . json_encode(['error' => $curlError]) . "\n\n";
-        flush();
+            $ch = curl_init('https://api.anthropic.com/v1/messages');
+            curl_setopt_array($ch, [
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => $payload,
+                CURLOPT_RETURNTRANSFER => false,
+                CURLOPT_TIMEOUT => 300,
+                CURLOPT_CONNECTTIMEOUT => 15,
+                CURLOPT_HTTPHEADER => [
+                    'Content-Type: application/json',
+                    'x-api-key: ' . $apiKey,
+                    'anthropic-version: 2023-06-01',
+                ],
+                // Captura HTTP status da Anthropic ANTES dos dados
+                CURLOPT_HEADERFUNCTION => function($ch, $header) use (&$httpCode) {
+                    if (preg_match('/^HTTP\/\S+\s+(\d{3})/', $header, $m)) {
+                        $httpCode = (int)$m[1];
+                    }
+                    return strlen($header);
+                },
+                // Só envia dados ao browser se status = 200
+                CURLOPT_WRITEFUNCTION => function($ch, $data) use (&$httpCode, &$errorBody, &$headersSent) {
+                    // API retornou erro — buffer sem enviar ao browser
+                    if ($httpCode !== 200) {
+                        $errorBody .= $data;
+                        return strlen($data);
+                    }
+
+                    // Primeira vez com dados bons — agora sim envia headers SSE
+                    if (!$headersSent) {
+                        header('Content-Type: text/event-stream; charset=utf-8');
+                        header('Cache-Control: no-cache');
+                        header('Connection: keep-alive');
+                        header('X-Accel-Buffering: no');
+                        $headersSent = true;
+                    }
+
+                    // Forward SSE data direto pro browser
+                    echo $data;
+                    if (ob_get_level()) ob_flush();
+                    flush();
+                    return strlen($data);
+                },
+            ]);
+
+            curl_exec($ch);
+            $curlError = curl_error($ch);
+            curl_close($ch);
+
+            // Sucesso — dados já foram enviados ao browser via SSE
+            if ($headersSent) {
+                exit;
+            }
+
+            // Erro retryable (overloaded, rate limit, conexão)
+            if ($curlError || $httpCode === 529 || $httpCode === 429) {
+                continue; // Tenta novamente
+            }
+
+            // Erro não-retryable (400, 401, 403, etc.)
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code($httpCode ?: 502);
+            echo $errorBody ?: json_encode(['error' => 'Erro na API']);
+            exit;
+        }
     }
 
+    // Todas as tentativas falharam
+    header('Content-Type: application/json; charset=utf-8');
+    http_response_code(503);
+    echo json_encode([
+        'error' => 'A API do Claude está sobrecarregada. O servidor tentou múltiplas vezes sem sucesso. Aguarde 30 segundos e tente novamente.'
+    ]);
     exit;
 }
 
 // ========== NORMAL MODE (fallback) ==========
 header('Content-Type: application/json; charset=utf-8');
 
-$payload = json_encode([
-    'model' => $model,
-    'max_tokens' => isset($input['max_tokens']) ? (int)$input['max_tokens'] : 8000,
-    'system' => $input['system'] ?? '',
-    'messages' => $input['messages'],
-]);
+foreach ($models as $modelIdx => $model) {
+    for ($attempt = 0; $attempt < $maxRetries; $attempt++) {
+        if ($attempt > 0 || $modelIdx > 0) {
+            $delay = $retryDelays[min($attempt, count($retryDelays) - 1)];
+            sleep($delay);
+        }
 
-$ch = curl_init('https://api.anthropic.com/v1/messages');
-curl_setopt_array($ch, [
-    CURLOPT_POST => true,
-    CURLOPT_POSTFIELDS => $payload,
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_TIMEOUT => 300,
-    CURLOPT_CONNECTTIMEOUT => 30,
-    CURLOPT_HTTPHEADER => [
-        'Content-Type: application/json',
-        'x-api-key: ' . $apiKey,
-        'anthropic-version: 2023-06-01',
-    ],
-]);
+        $payload = json_encode([
+            'model' => $model,
+            'max_tokens' => isset($input['max_tokens']) ? (int)$input['max_tokens'] : 8000,
+            'system' => $input['system'] ?? '',
+            'messages' => $input['messages'],
+        ]);
 
-$response = curl_exec($ch);
-$httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$curlError = curl_error($ch);
-curl_close($ch);
+        $ch = curl_init('https://api.anthropic.com/v1/messages');
+        curl_setopt_array($ch, [
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => $payload,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 300,
+            CURLOPT_CONNECTTIMEOUT => 15,
+            CURLOPT_HTTPHEADER => [
+                'Content-Type: application/json',
+                'x-api-key: ' . $apiKey,
+                'anthropic-version: 2023-06-01',
+            ],
+        ]);
 
-if ($curlError) {
-    http_response_code(502);
-    echo json_encode(['error' => 'Erro de conexão: ' . $curlError]);
-    exit;
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = curl_error($ch);
+        curl_close($ch);
+
+        // Retryable
+        if ($curlError || $httpCode === 529 || $httpCode === 429) continue;
+
+        // Sucesso ou erro não-retryable
+        http_response_code($httpCode);
+        echo $response;
+        exit;
+    }
 }
 
-http_response_code($httpCode);
-echo $response;
+// Todas as tentativas falharam
+http_response_code(503);
+echo json_encode([
+    'error' => 'A API do Claude está sobrecarregada. Aguarde 30 segundos e tente novamente.'
+]);

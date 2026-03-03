@@ -55,6 +55,7 @@ export default function ProjectGenerator() {
   const inputRef = useRef(null);
   const timerRef = useRef(null);
   const streamRef = useRef(null);
+  const lastAnswersRef = useRef(null);
 
   useEffect(() => {
     setHistory(loadHistory());
@@ -92,6 +93,7 @@ export default function ProjectGenerator() {
   };
 
   const generateProject = async (data) => {
+    lastAnswersRef.current = data;
     setGenerating(true);
     setError("");
     setResult("");
@@ -259,6 +261,14 @@ Por favor, gere o projeto completo e estruturado seguindo todas as seções soli
   const cancelGeneration = () => {
     if (streamRef.current) {
       streamRef.current.abort();
+    }
+  };
+
+  const retryGeneration = () => {
+    const data = lastAnswersRef.current;
+    if (data) {
+      setError("");
+      generateProject(data);
     }
   };
 
@@ -732,9 +742,45 @@ Por favor, gere o projeto completo e estruturado seguindo todas as seções soli
       )}
 
       {error && (
-        <div style={{ position: "fixed", bottom: "24px", left: "50%", transform: "translateX(-50%)", background: "rgba(239, 68, 68, 0.15)", border: "1px solid rgba(239, 68, 68, 0.3)", borderRadius: "12px", padding: "14px 24px", color: "#f87171", fontSize: "14px", zIndex: 50, maxWidth: "90vw" }}>
-          {error}
-          <button onClick={() => setError("")} style={{ marginLeft: "16px", background: "none", border: "none", color: "#f87171", cursor: "pointer", fontWeight: 700 }}>✕</button>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.97)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 60, padding: "24px" }}>
+          <div style={{ maxWidth: "480px", textAlign: "center" }}>
+            <div style={{ fontSize: "56px", marginBottom: "20px" }}>
+              {error.includes("cancelada") ? "🚫" : "⚠️"}
+            </div>
+            <h2 style={{ color: "#f0f9ff", fontSize: "22px", fontWeight: 700, marginBottom: "12px" }}>
+              {error.includes("cancelada") ? "Geração Cancelada" : "Erro na Geração"}
+            </h2>
+            <p style={{ color: "#94a3b8", fontSize: "15px", lineHeight: "1.6", marginBottom: "8px" }}>
+              {error.includes("sobrecarregada") || error.includes("529") || error.includes("overloaded")
+                ? "A API do Claude está sobrecarregada neste momento. O servidor já tentou automaticamente várias vezes."
+                : error.includes("cancelada")
+                  ? "Você cancelou a geração do projeto."
+                  : error}
+            </p>
+            {(error.includes("sobrecarregada") || error.includes("529") || error.includes("overloaded")) && (
+              <p style={{ color: "#64748b", fontSize: "13px", marginBottom: "28px" }}>
+                Aguarde alguns segundos e tente novamente. O servidor tentará modelos alternativos automaticamente.
+              </p>
+            )}
+            <div style={{ display: "flex", gap: "12px", justifyContent: "center", marginTop: "24px" }}>
+              {!error.includes("cancelada") && lastAnswersRef.current && (
+                <button
+                  onClick={retryGeneration}
+                  style={{ background: "linear-gradient(135deg, #0ea5e9 0%, #38bdf8 100%)", color: "#fff", border: "none", padding: "14px 36px", borderRadius: "12px", fontSize: "16px", fontWeight: 700, cursor: "pointer", boxShadow: "0 4px 20px rgba(14, 165, 233, 0.3)", transition: "all 0.2s" }}
+                  onMouseOver={e => e.target.style.transform = "translateY(-2px)"}
+                  onMouseOut={e => e.target.style.transform = "translateY(0)"}
+                >
+                  🔄 Tentar Novamente
+                </button>
+              )}
+              <button
+                onClick={() => { setError(""); setCurrentStep(STEPS.length - 1); }}
+                style={{ background: "rgba(148, 163, 184, 0.1)", color: "#94a3b8", border: "1px solid rgba(148, 163, 184, 0.25)", padding: "14px 28px", borderRadius: "12px", fontSize: "15px", fontWeight: 600, cursor: "pointer", transition: "all 0.2s" }}
+              >
+                ← Voltar
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
